@@ -31,28 +31,27 @@ func Get_probable_pos(Distance, _Satellites_pos mat.Matrix, mode int) (POS, Sate
 	_AC := math.Sqrt(math.Pow((_A[2][0] - _A[0][0]) * 3600 * 23.69, 2) + math.Pow((_A[2][1] - _A[0][1]) * 3600 * 30.8, 2) + math.Pow((_A[2][2] - _A[0][2]), 2))
 	_BC := math.Sqrt(math.Pow((_A[2][0] - _A[1][0]) * 3600 * 23.69, 2) + math.Pow((_A[2][1] - _A[1][1]) * 3600 * 30.8, 2) + math.Pow((_A[2][2] - _A[1][2]), 2))
 	_COS_A := (math.Pow(_AC, 2) + math.Pow(_AB, 2) - math.Pow(_BC, 2)) / (2 * _AC * _AB)
-
+	
 	_Trans = mat.Zeros(3, 3)
 	// X
 	_Trans[0][0] = (_A[1][0] - _A[0][0]) / _AB
 	_Trans[0][1] = (_A[1][1] - _A[0][1]) / _AB
 	_Trans[0][2] = (_A[1][2] - _A[0][2]) / _AB
-	//
+	// Y
 	_d := _AC * _COS_A
 	_H := math.Sqrt(_AC * _AC - _d * _d)
 	var D [3]float64
 	D[0] = _A[0][0] + _d * _Trans[0][0]
 	D[1] = _A[0][1] + _d * _Trans[0][1]
 	D[2] = _A[0][2] + _d * _Trans[0][2]
-	// Y
 	_Trans[1][0] = (_A[2][0] - D[0]) / _H
 	_Trans[1][1] = (_A[2][1] - D[1]) / _H
 	_Trans[1][2] = (_A[2][2] - D[2]) / _H
-	//
-	_Trans[2][0] = 0//TEST(Trans, 2, 0)
-	_Trans[2][1] = 0//TEST(Trans, 2, 1)
-	_Trans[2][2] = 1//TEST(Trans, 2, 2)
-	
+	// Z
+	_Trans[2][0] = 0
+	_Trans[2][1] = 0
+	_Trans[2][2] = 1
+
 	Satellites_xyz = mat.Zeros(3, 3)
 	Satellites_xyz[1][0] = _AB
 	Satellites_xyz[1][2] = h_2
@@ -60,7 +59,6 @@ func Get_probable_pos(Distance, _Satellites_pos mat.Matrix, mode int) (POS, Sate
 	Satellites_xyz[2][0] = _d
 	Satellites_xyz[2][1] = _H
 	Satellites_xyz[2][2] = h_3
-	
 	
 	AB := math.Sqrt(math.Pow((Satellites_pos[1][0] - Satellites_pos[0][0]) * 3600 * 23.69, 2) + math.Pow((Satellites_pos[1][1] - Satellites_pos[0][1]) * 3600 * 30.8, 2) + math.Pow((Satellites_pos[1][2] - Satellites_pos[0][2]), 2))
 	AC := math.Sqrt(math.Pow((Satellites_pos[2][0] - Satellites_pos[0][0]) * 3600 * 23.69, 2) + math.Pow((Satellites_pos[2][1] - Satellites_pos[0][1]) * 3600 * 30.8, 2) + math.Pow((Satellites_pos[2][2] - Satellites_pos[0][2]), 2))
@@ -72,7 +70,6 @@ func Get_probable_pos(Distance, _Satellites_pos mat.Matrix, mode int) (POS, Sate
 	Trans = mat.Zeros(3,3)
 
 	Trans[0][0] = _AB / AB
-	Trans[0][1] = 0
 	Trans[0][2] = h_2 / AB
 
 	Trans[1][0] = (_d - (_AB * d / AB)) / H
@@ -87,36 +84,52 @@ func Get_probable_pos(Distance, _Satellites_pos mat.Matrix, mode int) (POS, Sate
 	Trans[2][1] /= temp
 	Trans[2][2] /= temp
 
-	
-	h := 0.0
-	d1, d2, d3, d4 := 0.0, 0.0, 0.0, 0.0
-	COS := 0.0
-	X, Y := 0.0, 0.0
-	err := 0.0
-	
-	for h = 0; err <= 0.0 ; h++ {
-		d1 = math.Sqrt(p1 * p1 - h * h)
-		d2 = math.Sqrt(p2 * p2 - h * h)
-		d3 = math.Sqrt(p3 * p3 - h * h)
-		COS = (d1 * d1 + AB * AB - d2 * d2) / (2 * d1 * AB)
-		X = d1 * COS
+	// New method
+	p := (AB + AC + BC) / 2
+	S := math.Sqrt(p * (p - AB) * (p - AC) * (p - BC))
+	alpha := p1
+	bravo := p2
+	charlie := p3
+	delta := BC
+	echo := AC
+	fox := AB
+	Delta := bravo*bravo+charlie*charlie-delta*delta
+	Echo := alpha*alpha+charlie*charlie-echo*echo
+	Fox :=alpha*alpha+bravo*bravo-fox*fox
+	V := math.Sqrt(4*alpha*alpha*bravo*bravo*charlie*charlie - alpha*alpha*Delta*Delta - bravo*bravo*Echo*Echo - charlie*charlie*Fox*Fox + Delta*Echo*Fox)/12
+	Height := V * 3 / S
+	d1 := math.Sqrt(p1 * p1 - Height * Height)
+	d2 := math.Sqrt(p2 * p2 - Height * Height)
+	d3 := math.Sqrt(p3 * p3 - Height * Height)
+	COS_Alpha := (d1 * d1 + AB * AB - d2 * d2) / (2 * d1 * AB)
+	Y := 0.0
+	X := d1 * COS_Alpha
+	if (1 - COS_Alpha) < 0.000000001 {
+		Y = 0.0
+	} else {
 		Y = math.Sqrt(d1 * d1 - X * X)
-		d4 = math.Sqrt(math.Pow((d - X), 2) + math.Pow((H - Y), 2))
-		err = d4 - d3
+	}
+	
+	d4 := math.Pow((d - X), 2) + math.Pow((H - Y), 2)
+	d5 := math.Pow((d - X), 2) + math.Pow((H + Y), 2)
+	e1 := math.Abs(math.Sqrt(d4) - d3)
+	e2 := math.Abs(math.Sqrt(d5) - d3)
+	if e2 < e1 {
+		log.Println("below")
+		Y = -Y
 	}
 
+	
 	XYZ := mat.Zeros(1,3)
 	XYZ[0][0] = X
 	XYZ[0][1] = Y
-	XYZ[0][2] = h - 1
+	XYZ[0][2] = Height
 	
 	POS = mat.Mat_mult(XYZ, Trans)
 	if mode == 0 {
-		POS = mat.Mat_mult(POS, _Trans)
-		POS[0][0] += Satellites_pos[0][0]
-		POS[0][1] += Satellites_pos[0][1]
-		POS[0][2] += Satellites_pos[0][2]
+		POS = Xyz2pos(POS)
 	}
+	
 	return
 }
 
